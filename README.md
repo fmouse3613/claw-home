@@ -184,17 +184,16 @@ Planned or likely next improvements:
 
 ### Dashboard Overview
 
-![Dashboard Overview](./docs/screenshots/dashboard-overview.svg)
+![Dashboard Overview](./docs/screenshots/dashboard-large.png)
 
 ### Agent Management
 
-![Agent Management](./docs/screenshots/agent-management.svg)
+![Agent Management](./docs/screenshots/agent-real.png)
 
 ### Model Management
 
-![Model Management](./docs/screenshots/model-management.svg)
+![Model Management](./docs/screenshots/model-real.png)
 
-> Note: these preview visuals are generated from the current product structure and design system. They will be replaced with live runtime screenshots as the release materials are polished.
 
 ## Author
 
