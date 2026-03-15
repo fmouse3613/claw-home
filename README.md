@@ -161,13 +161,27 @@ A few things are intentionally practical rather than perfect right now:
 
 ## CI / Build Automation
 
-GitHub Actions is configured to build the project on:
+GitHub Actions is configured in two layers:
+
+- `Build`: runs on push / pull request and uploads build artifacts for macOS, Windows, and Linux
+- `Release`: runs when you push a version tag such as `v0.1.0`, then creates or updates a GitHub Release and attaches platform installers automatically
+
+### Release Flow
+
+When you are ready to publish a version:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+After the tag is pushed, GitHub Actions will build the app on:
 
 - macOS
 - Windows
 - Linux
 
-The workflow uploads platform bundles as build artifacts so releases are easier to verify before publishing.
+and upload the generated bundles to the GitHub Release for that tag.
 
 ## Roadmap
 
