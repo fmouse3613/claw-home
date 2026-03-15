@@ -1,0 +1,13 @@
+{
+  "name": "claw-home",
+  "private": true,
+  "version": "0.1.0",
+  "author": "FMouse <fmouse3613@gmail.com>",
+  "type": "module",
+  "scripts": {
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

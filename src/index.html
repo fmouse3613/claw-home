@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Claw Home</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="busy-overlay hidden" id="busyOverlay">
+      <div class="busy-card">
+        <div class="busy-spinner"></div>
+        <div class="busy-title" id="busyTitle">正在处理...</div>
+        <div class="busy-text" id="busyText">请稍等，不要重复点击。</div>
+      </div>
+    </div>
+    <div class="busy-overlay hidden" id="renameOverlay">
+      <div class="busy-card">
+        <div class="busy-title" id="renameTitle">修改 Agent 名称</div>
+        <div class="busy-text" id="renameDesc">输入一个更好理解的名字，保存后会写回 OpenClaw。</div>
+        <input class="auth-input modal-input" id="renameInput" placeholder="例如 客服助手" />
+        <div class="setup-actions modal-actions">
+          <button class="btn ghost small" id="renameCancelBtn">取消</button>
+          <button class="btn primary small" id="renameSaveBtn">保存</button>
+        </div>
+      </div>
+    </div>
+    <div class="busy-overlay hidden" id="modelOverlay">
+      <div class="busy-card">
+        <div class="busy-title" id="modelTitle">更换 Agent 模型</div>
+        <div class="busy-text" id="modelDesc">先选择服务商，再选择这个服务商下面的模型，保存后会自动重启 Gateway。</div>
+        <select class="auth-input modal-input" id="modelProviderSelect"></select>
+        <select class="auth-input modal-input" id="modelSelect"></select>
+        <div class="setup-actions modal-actions">
+          <button class="btn ghost small" id="modelCancelBtn">取消</button>
+          <button class="btn primary small" id="modelSaveBtn">保存并重启</button>
+        </div>
+      </div>
+    </div>
+    <div class="busy-overlay hidden" id="deleteOverlay">
+      <div class="busy-card">
+        <div class="busy-title" id="deleteTitle">删除 Agent</div>
+        <div class="busy-text" id="deleteText">删除后，这个 Agent 的工作区和状态也会一起移除。</div>
+        <div class="setup-actions modal-actions">
+          <button class="btn ghost small" id="deleteCancelBtn">取消</button>
+          <button class="btn primary small" id="deleteConfirmBtn">确认删除</button>
+        </div>
+      </div>
+    </div>
+    <div class="busy-overlay hidden" id="addModelOverlay">
+      <div class="busy-card">
+        <div class="busy-title" id="addModelTitle">新增模型</div>
+        <div class="busy-text" id="addModelDesc">选择服务商后，把模型加入到这个服务商下面，并同步到模型列表。</div>
+        <select class="auth-input modal-input" id="addModelProviderSelect"></select>
+        <input class="auth-input modal-input" id="addModelInput" placeholder="模型 ID，例如 minimax-m2.5" />
+        <input class="auth-input modal-input" id="addModelNameInput" placeholder="显示名称，例如 MiniMax M2.5" />
+        <div class="setup-actions modal-actions">
+          <button class="btn ghost small" id="addModelCancelBtn">取消</button>
+          <button class="btn primary small" id="addModelSaveBtn">保存</button>
+        </div>
+      </div>
+    </div>
+    <div class="busy-overlay hidden" id="addProviderOverlay">
+      <div class="busy-card">
+        <div class="busy-title" id="addProviderTitle">新增服务商</div>
+        <div class="busy-text" id="addProviderDesc">填写服务商别名、接口地址和 API Key，保存后就可以往这个服务商下挂模型。</div>
+        <input class="auth-input modal-input" id="providerAliasInput" placeholder="别名，例如 custom-ark-hk" />
+        <input class="auth-input modal-input" id="providerBaseUrlInput" placeholder="Base URL" />
+        <input class="auth-input modal-input" id="providerApiKeyInput" placeholder="API Key" />
+        <select class="auth-input modal-input" id="providerApiTypeSelect">
+          <option value="openai-completions">openai-completions</option>
+        </select>
+        <div class="setup-actions modal-actions">
+          <button class="btn ghost small" id="addProviderCancelBtn">取消</button>
+          <button class="btn primary small" id="addProviderSaveBtn">保存</button>
+        </div>
+      </div>
+    </div>
+    <div class="busy-overlay hidden" id="addAgentOverlay">
+      <div class="busy-card">
+        <div class="busy-title" id="addAgentTitle">新建 Agent</div>
+        <div class="busy-text" id="addAgentDesc">先选择服务商和模型，再输入 Agent 名称。</div>
+        <input class="auth-input modal-input" id="addAgentNameInput" placeholder="Agent 名称，例如 客服助手" />
+        <select class="auth-input modal-input" id="addAgentProviderSelect"></select>
+        <select class="auth-input modal-input" id="addAgentModelSelect"></select>
+        <div class="modal-status hidden" id="addAgentStatus"></div>
+        <div class="setup-actions modal-actions" id="addAgentActions">
+          <button class="btn ghost small" type="button" id="addAgentCancelBtn">取消</button>
+          <button class="btn primary small" type="button" id="addAgentSaveBtn">创建</button>
+        </div>
+      </div>
+    </div>
+    <div class="busy-overlay hidden" id="connectPhoneOverlay">
+      <div class="busy-card">
+        <div class="busy-title" id="connectPhoneTitle">连接手机 App</div>
+        <div class="busy-text" id="connectPhoneText">选择一个 App，把消息入口交给这个 Agent。</div>
+        <select class="auth-input modal-input" id="connectPhoneAppTypeSelect"></select>
+        <div id="connectPhoneFields"></div>
+        <div class="setup-actions modal-actions">
+          <button class="btn ghost small" id="connectPhoneCancelBtn">取消</button>
+          <button class="btn primary small" id="connectPhoneConfirmBtn">继续连接</button>
+        </div>
+      </div>
+    </div>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="logo" aria-hidden="true">
+            <svg class="logo-icon" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="logoBg" x1="12" y1="8" x2="53" y2="56" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#FEFFFF" />
+                  <stop offset="0.45" stop-color="#EEF4FF" />
+                  <stop offset="1" stop-color="#D5E4FF" />
+                </linearGradient>
+                <linearGradient id="logoAccent" x1="18" y1="17" x2="47" y2="50" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#73A0FF" />
+                  <stop offset="1" stop-color="#2F6BFF" />
+                </linearGradient>
+              </defs>
+              <rect x="4" y="4" width="56" height="56" rx="16" fill="url(#logoBg)" />
+              <path d="M32 14.7C34.6 14.7 36.7 16.8 36.7 19.4V22.2H27.3V19.4C27.3 16.8 29.4 14.7 32 14.7Z" fill="#E4EEFF" />
+              <path d="M26.7 18.4C24.8 15.3 21.8 13.4 18.3 13.4C15.3 13.4 12.9 14.8 11 17.6C9.7 19.6 9 22.1 9.2 24.9C13.4 24.9 16.6 24 18.9 22.1" stroke="#2F6BFF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M37.3 18.4C39.2 15.3 42.2 13.4 45.7 13.4C48.7 13.4 51.1 14.8 53 17.6C54.3 19.6 55 22.1 54.8 24.9C50.6 24.9 47.4 24 45.1 22.1" stroke="#2F6BFF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M18.5 20.4C16.1 20.4 14.2 21.2 12.5 23" stroke="#2F6BFF" stroke-width="2.1" stroke-linecap="round" />
+              <path d="M45.5 20.4C47.9 20.4 49.8 21.2 51.5 23" stroke="#2F6BFF" stroke-width="2.1" stroke-linecap="round" />
+              <path d="M29.2 16.8C30.2 15.8 31 15.3 32 15.3C33 15.3 33.8 15.8 34.8 16.8" stroke="#2F6BFF" stroke-width="1.9" stroke-linecap="round" />
+              <path d="M32 17L46.5 29.2V46.3C46.5 48.3 44.8 50 42.8 50H21.2C19.2 50 17.5 48.3 17.5 46.3V29.2L32 17Z" fill="url(#logoAccent)" />
+              <path d="M32 20.1L42.3 28.9V44.7C42.3 45.5 41.7 46.1 40.9 46.1H23.1C22.3 46.1 21.7 45.5 21.7 44.7V28.9L32 20.1Z" fill="#F7FBFF" fill-opacity="0.96" />
+              <path d="M26.8 35.8C26.8 34 28.2 32.6 30 32.6H34C35.8 32.6 37.2 34 37.2 35.8V46.1H26.8V35.8Z" fill="url(#logoAccent)" />
+            </svg>
+          </div>
+          <div class="brand-text">
+            <div class="brand-title">Claw Home</div>
+            <div class="brand-sub">你的 OpenClaw 控制中心</div>
+            <div class="brand-meta">By FMouse</div>
+          </div>
+        </div>
+        <div class="sidebar-footer">
+          <div class="pill">本地 Gateway</div>
+          <div class="status-row">
+            <span class="dot" id="connDot"></span>
+            <span id="connText">未连接</span>
+          </div>
+          <div class="auth-box">
+            <label class="auth-label" for="gatewayToken">Gateway Token</label>
+            <input
+              id="gatewayToken"
+              class="auth-input"
+              type="password"
+              placeholder="填入 token"
+            />
+            <button class="btn primary small" id="connectBtn">连接</button>
+          </div>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div class="topbar-left">
+            <div class="title">控制台</div>
+            <div class="subtitle">你的 OpenClaw 控制中心</div>
+          </div>
+          <div class="topbar-right">
+            <button class="btn ghost" id="openChatBtn">打开聊天</button>
+            <button class="btn primary" id="bootstrapBtn">一键开始</button>
+          </div>
+        </header>
+
+        <section class="setup-banner hidden" id="setupBanner">
+          <div>
+            <div class="setup-title" id="setupTitle">需要安装 OpenClaw CLI</div>
+            <div class="setup-text" id="setupText">
+              本机还没有可用的 OpenClaw 命令行，先安装后才能自动拉起 Gateway。
+            </div>
+          </div>
+          <div class="setup-actions">
+            <button class="btn primary small" id="installCliBtn">终端安装</button>
+            <button class="btn ghost small" id="copyInstallBtn">复制命令</button>
+            <button class="btn ghost small" id="openDocsBtn">安装文档</button>
+          </div>
+        </section>
+
+        <section class="onboarding hidden" id="onboardingCard">
+          <div class="onboarding-copy">
+            <div class="onboarding-kicker">首次启动</div>
+            <div class="onboarding-title" id="onboardingTitle">先把 Claw Home 配起来</div>
+            <div class="onboarding-text" id="onboardingText">
+              按下面 4 步走完，你就能开始管理 Agent、模型和手机 App 了。
+            </div>
+          </div>
+          <div class="onboarding-steps" id="onboardingSteps"></div>
+        </section>
+
+        <section class="grid">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">服务控制</div>
+              <div class="chip neutral" id="serviceChip">检查中</div>
+            </div>
+            <div class="metrics compact">
+              <div class="metric">
+                <div class="metric-label">Gateway</div>
+                <div class="metric-value" id="metricGateway">-</div>
+              </div>
+              <div class="metric">
+                <div class="metric-label">Agent 数量</div>
+                <div class="metric-value" id="metricDevices">-</div>
+              </div>
+              <div class="metric">
+                <div class="metric-label">会话数量</div>
+                <div class="metric-value" id="metricSessions">-</div>
+              </div>
+            </div>
+            <div class="service-actions">
+              <button class="btn primary small" id="toggleGatewayBtn">启动服务</button>
+            </div>
+          </div>
+
+          <div class="card wide">
+            <div class="card-header">
+              <div class="card-title">Agent 管理</div>
+              <div class="chip neutral" id="agentHint">普通用户常用信息</div>
+            </div>
+            <div class="agent-cards" id="agentCards">
+              <div class="agent-empty">暂无 Agent 数据</div>
+            </div>
+          </div>
+
+          <div class="card wide">
+            <div class="card-header">
+              <div class="card-title">模型管理</div>
+              <div class="chip neutral" id="modelPrimaryChip">默认模型：-</div>
+            </div>
+            <div class="subsection-head provider-head">
+              <div>
+                <div class="subsection-title">服务商与模型</div>
+                <div class="subsection-sub">每个服务商下面管理自己的模型</div>
+              </div>
+              <button class="btn ghost small" id="addProviderBtn">新增服务商</button>
+            </div>
+            <div class="provider-list" id="providerList">
+              <div class="agent-empty">暂无服务商配置</div>
+            </div>
+          </div>
+
+          <div class="card wide">
+            <div class="card-header">
+            <div class="card-title">运行日志</div>
+              <div class="chip neutral" id="logsRealtimeChip">实时</div>
+            </div>
+            <div class="log-box" id="logBox"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="./main.js"></script>
+  </body>
+</html>
