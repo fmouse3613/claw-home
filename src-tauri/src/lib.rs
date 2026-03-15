@@ -26,6 +26,12 @@ struct OpenClawCommandResult {
     detail: String,
 }
 
+#[cfg(target_os = "windows")]
+const INSTALL_COMMAND: &str = "iwr -useb https://openclaw.ai/install.ps1 | iex";
+#[cfg(not(target_os = "windows"))]
+const INSTALL_COMMAND: &str =
+    "curl -fsSL --proto '=https' --tlsv1.2 https://openclaw.ai/install.sh | bash";
+
 async fn run_blocking<F, T>(task: F) -> Result<T, String>
 where
     F: FnOnce() -> Result<T, String> + Send + 'static,
@@ -143,10 +149,7 @@ fn ensure_openclaw_gateway_sync() -> Result<OpenClawCommandResult, String> {
 
 #[tauri::command]
 fn open_openclaw_install_docs() -> Result<OpenClawCommandResult, String> {
-    let status = Command::new("open")
-        .arg("https://docs.openclaw.ai/install")
-        .status()
-        .map_err(|err| err.to_string())?;
+    let status = open_url("https://docs.openclaw.ai/install")?;
 
     Ok(OpenClawCommandResult {
         success: status.success(),
@@ -161,28 +164,86 @@ fn open_openclaw_install_docs() -> Result<OpenClawCommandResult, String> {
 
 #[tauri::command]
 fn launch_openclaw_installer() -> Result<OpenClawCommandResult, String> {
-    let installer_cmd =
-        "curl -fsSL --proto '=https' --tlsv1.2 https://openclaw.ai/install.sh | bash";
-    let script = format!(
-        "tell application \"Terminal\"\nactivate\ndo script \"{}\"\nend tell",
-        installer_cmd.replace('\\', "\\\\").replace('\"', "\\\"")
-    );
-
-    let status = Command::new("osascript")
-        .arg("-e")
-        .arg(script)
-        .status()
-        .map_err(|err| err.to_string())?;
+    let status = launch_in_terminal(INSTALL_COMMAND)?;
 
     Ok(OpenClawCommandResult {
         success: status.success(),
         action: "launch-installer".to_string(),
         detail: if status.success() {
-            "Opened Terminal and started the OpenClaw installer".to_string()
+            if cfg!(target_os = "windows") {
+                "已打开 PowerShell 并开始 OpenClaw 安装流程。Windows 上建议优先使用 WSL2。"
+                    .to_string()
+            } else {
+                "Opened Terminal and started the OpenClaw installer".to_string()
+            }
         } else {
-            format!("osascript exited with status {}", status)
+            format!("installer launcher exited with status {}", status)
         },
     })
+}
+
+fn open_url(url: &str) -> Result<std::process::ExitStatus, String> {
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg(url)
+            .status()
+            .map_err(|err| err.to_string())
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("cmd")
+            .args(["/C", "start", "", url])
+            .status()
+            .map_err(|err| err.to_string())
+    }
+
+    #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
+    {
+        Command::new("xdg-open")
+            .arg(url)
+            .status()
+            .map_err(|err| err.to_string())
+    }
+}
+
+fn launch_in_terminal(command: &str) -> Result<std::process::ExitStatus, String> {
+    #[cfg(target_os = "macos")]
+    {
+        let script = format!(
+            "tell application \"Terminal\"\nactivate\ndo script \"{}\"\nend tell",
+            command.replace('\\', "\\\\").replace('\"', "\\\"")
+        );
+
+        Command::new("osascript")
+            .arg("-e")
+            .arg(script)
+            .status()
+            .map_err(|err| err.to_string())
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("powershell")
+            .args([
+                "-NoExit",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                command,
+            ])
+            .status()
+            .map_err(|err| err.to_string())
+    }
+
+    #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
+    {
+        Command::new("x-terminal-emulator")
+            .args(["-e", "bash", "-lc", command])
+            .status()
+            .map_err(|err| err.to_string())
+    }
 }
 
 #[tauri::command]
@@ -667,16 +728,7 @@ fn connect_agent_phone_app_sync(
                 account = escaped_account,
             );
 
-            let script = format!(
-                "tell application \"Terminal\"\nactivate\ndo script \"{}\"\nend tell",
-                script_body
-            );
-
-            let status = Command::new("osascript")
-                .arg("-e")
-                .arg(script)
-                .status()
-                .map_err(|err| err.to_string())?;
+            let status = launch_in_terminal(&script_body)?;
 
             if !status.success() {
                 return Ok(OpenClawCommandResult {
@@ -693,20 +745,13 @@ fn connect_agent_phone_app_sync(
             });
         }
         "whatsapp" => {
-            let script = format!(
-                "tell application \"Terminal\"\nactivate\ndo script \"{}\"\nend tell",
-                format!(
-                    "{} channels login --channel whatsapp --account {}",
-                    cli.replace('\\', "\\\\").replace('\"', "\\\""),
-                    account.replace('\\', "\\\\").replace('\"', "\\\"")
-                )
+            let login_cmd = format!(
+                "{} channels login --channel whatsapp --account {}",
+                cli.replace('\\', "\\\\").replace('\"', "\\\""),
+                account.replace('\\', "\\\\").replace('\"', "\\\"")
             );
 
-            let status = Command::new("osascript")
-                .arg("-e")
-                .arg(script)
-                .status()
-                .map_err(|err| err.to_string())?;
+            let status = launch_in_terminal(&login_cmd)?;
 
             if !status.success() {
                 return Ok(OpenClawCommandResult {
