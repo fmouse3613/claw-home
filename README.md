@@ -159,6 +159,16 @@ A few things are intentionally practical rather than perfect right now:
 - distributed builds and code signing are not fully automated yet
 - macOS Gatekeeper may block unsigned builds on other machines
 
+## CI / Build Automation
+
+GitHub Actions is configured to build the project on:
+
+- macOS
+- Windows
+- Linux
+
+The workflow uploads platform bundles as build artifacts so releases are easier to verify before publishing.
+
 ## Roadmap
 
 Planned or likely next improvements:
