@@ -69,7 +69,12 @@ const connectPhoneFields = document.getElementById("connectPhoneFields");
 const connectPhoneCancelBtn = document.getElementById("connectPhoneCancelBtn");
 const connectPhoneConfirmBtn = document.getElementById("connectPhoneConfirmBtn");
 
-const { invoke } = window.__TAURI__.core;
+const isDemoMode = new URLSearchParams(window.location.search).get("demo") === "1";
+const invoke = window.__TAURI__?.core?.invoke
+  ? window.__TAURI__.core.invoke
+  : async () => {
+      throw new Error("Tauri API unavailable");
+    };
 
 const STORAGE_TOKEN_KEY = "openclaw_gateway_token";
 const INSTALL_COMMAND =
@@ -226,6 +231,111 @@ let addModelDraft = null;
 let addProviderDraft = null;
 let addAgentDraft = null;
 let connectPhoneDraft = null;
+
+const DEMO_DATA = {
+  runtime: {
+    cliInstalled: true,
+    gatewayOnline: true,
+    version: "OpenClaw 2026.3.12",
+  },
+  agents: {
+    agents: [
+      {
+        id: "main",
+        name: "Claw 主助手",
+        model: "custom-ark/minimax-m2.5",
+        bindings: 2,
+        routes: ["Telegram · default", "飞书 · team"],
+        isDefault: true,
+      },
+      {
+        id: "support-bot",
+        name: "客服助手",
+        model: "custom-ark/customer-support-v1",
+        bindings: 1,
+        routes: ["Slack · support"],
+        isDefault: false,
+      },
+      {
+        id: "growth-bot",
+        name: "增长助手",
+        model: "custom-ark/content-pro",
+        bindings: 0,
+        routes: [],
+        isDefault: false,
+      },
+    ],
+  },
+  sessions: {
+    sessions: [
+      { agentId: "main", key: "agent:main:main", totalTokens: 3200, kind: "direct", updatedAt: Date.now(), modelProvider: "custom-ark", model: "minimax-m2.5" },
+      { agentId: "main", key: "agent:main:telegram", totalTokens: 1800, kind: "direct", updatedAt: Date.now(), modelProvider: "custom-ark", model: "minimax-m2.5" },
+      { agentId: "support-bot", key: "agent:support-bot:slack", totalTokens: 2400, kind: "direct", updatedAt: Date.now(), modelProvider: "custom-ark", model: "customer-support-v1" },
+      { agentId: "growth-bot", key: "agent:growth-bot:webchat", totalTokens: 1200, kind: "direct", updatedAt: Date.now(), modelProvider: "custom-ark", model: "content-pro" },
+    ],
+  },
+  channels: {
+    chat: {
+      telegram: ["default"],
+      feishu: ["team"],
+      slack: ["support"],
+    },
+  },
+  models: {
+    defaults: {
+      model: { primary: "custom-ark/minimax-m2.5" },
+      models: {
+        "custom-ark/minimax-m2.5": true,
+        "custom-ark/customer-support-v1": true,
+        "custom-ark/content-pro": true,
+      },
+    },
+    agents: {
+      list: [
+        { id: "main", name: "Claw 主助手", model: "custom-ark/minimax-m2.5", identity: { name: "Claw 主助手" } },
+        { id: "support-bot", name: "客服助手", model: "custom-ark/customer-support-v1", identity: { name: "客服助手" } },
+        { id: "growth-bot", name: "增长助手", model: "custom-ark/content-pro", identity: { name: "增长助手" } },
+      ],
+    },
+    catalog: {
+      providers: {
+        "custom-ark": {
+          api: "openai-completions",
+          baseUrl: "https://ark.example.com/v1",
+          apiKey: "demo-key",
+          models: [
+            { id: "minimax-m2.5", name: "MiniMax M2.5" },
+            { id: "customer-support-v1", name: "Customer Support V1" },
+            { id: "content-pro", name: "Content Pro" },
+          ],
+        },
+        "openai": {
+          api: "openai-completions",
+          baseUrl: "https://api.openai.com/v1",
+          apiKey: "demo-key",
+          models: [
+            { id: "gpt-5-mini", name: "GPT-5 mini" },
+            { id: "gpt-5.1", name: "GPT-5.1" },
+          ],
+        },
+      },
+    },
+  },
+  tokenUsage: {
+    agents: {
+      main: { totalTokens: 8420, trackedSessions: 2, trackedMessages: 18 },
+      "support-bot": { totalTokens: 5310, trackedSessions: 1, trackedMessages: 9 },
+      "growth-bot": { totalTokens: 0, trackedSessions: 1, trackedMessages: 4 },
+    },
+  },
+  agentActivity: {
+    agents: {
+      main: { status: "replying", tone: "info" },
+      "support-bot": { status: "working", tone: "success" },
+      "growth-bot": { status: "idle", tone: "neutral" },
+    },
+  },
+};
 
 function t(key, vars = {}) {
   const template = I18N.zh[key] || key;
@@ -1255,6 +1365,27 @@ function formatChannelName(channel) {
   return labels[String(channel || "").toLowerCase()] || channel || "未知渠道";
 }
 
+function loadDemoDashboard() {
+  runtimeStatus = DEMO_DATA.runtime;
+  modelConfigCache = DEMO_DATA.models;
+  tokenUsageCache = DEMO_DATA.tokenUsage;
+  agentActivityCache = DEMO_DATA.agentActivity;
+  agentsCache = normalizeAgents(DEMO_DATA.agents);
+  sessionsCache = normalizeSessions(DEMO_DATA.sessions);
+  channelsCache = slugChannelBindings(DEMO_DATA.channels);
+
+  hideSetupBanner();
+  hideOnboarding();
+  setConnectionStatus(true, t("online"));
+  serviceChip.textContent = t("onlineShort");
+  metricGateway.textContent = t("running");
+  setMetric(metricDevices, agentsCache.length);
+  setMetric(metricSessions, sessionsCache.length);
+  renderAgentCards(agentsCache, sessionsCache);
+  renderModels(modelConfigCache);
+  appendLog(`[${new Date().toLocaleTimeString()}] 已载入演示数据`);
+}
+
 async function loadTokenFromConfig() {
   try {
     const token = await invoke("read_openclaw_gateway_token");
@@ -1814,8 +1945,18 @@ hideSetupBanner();
 hideOnboarding();
 renderAgentCards([], []);
 renderModels(null);
-startAutoSync();
 
-loadTokenFromConfig().then(() => {
-  ensureGatewayThenSync();
-});
+if (isDemoMode) {
+  tokenInput.value = "demo-mode";
+  tokenInput.disabled = true;
+  connectBtn.disabled = true;
+  openChatBtn.disabled = true;
+  bootstrapBtn.disabled = true;
+  toggleGatewayBtn.disabled = true;
+  loadDemoDashboard();
+} else {
+  startAutoSync();
+  loadTokenFromConfig().then(() => {
+    ensureGatewayThenSync();
+  });
+}
