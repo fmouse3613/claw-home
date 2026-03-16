@@ -136,6 +136,12 @@
             <div class="brand-meta">By FMouse</div>
           </div>
         </div>
+        <nav class="sidebar-nav" id="sidebarNav">
+          <button class="nav-item active" type="button" data-view="home">首页</button>
+          <button class="nav-item" type="button" data-view="agents">Agent</button>
+          <button class="nav-item" type="button" data-view="models">模型</button>
+          <button class="nav-item" type="button" data-view="routes">路由</button>
+        </nav>
         <div class="sidebar-footer">
           <div class="pill">本地 Gateway</div>
           <div class="status-row">
@@ -162,7 +168,6 @@
             <div class="subtitle">你的 OpenClaw 控制中心</div>
           </div>
           <div class="topbar-right">
-            <button class="btn ghost" id="openChatBtn">打开聊天</button>
             <button class="btn primary" id="bootstrapBtn">一键开始</button>
           </div>
         </header>
@@ -192,7 +197,7 @@
           <div class="onboarding-steps" id="onboardingSteps"></div>
         </section>
 
-        <section class="grid">
+        <section class="grid page-view active" id="homeView">
           <div class="card">
             <div class="card-header">
               <div class="card-title">服务控制</div>
@@ -214,9 +219,20 @@
             </div>
             <div class="service-actions">
               <button class="btn primary small" id="toggleGatewayBtn">启动服务</button>
+              <button class="btn ghost small" id="restartGatewayBtn">重启服务</button>
             </div>
           </div>
 
+          <div class="card wide">
+            <div class="card-header">
+            <div class="card-title">运行日志</div>
+              <div class="chip neutral" id="logsRealtimeChip">实时</div>
+            </div>
+            <div class="log-box" id="logBox"></div>
+          </div>
+        </section>
+
+        <section class="grid page-view" id="agentsView">
           <div class="card wide">
             <div class="card-header">
               <div class="card-title">Agent 管理</div>
@@ -226,7 +242,21 @@
               <div class="agent-empty">暂无 Agent 数据</div>
             </div>
           </div>
+        </section>
 
+        <section class="grid page-view" id="routesView">
+          <div class="card wide">
+            <div class="card-header">
+              <div class="card-title">绑定关系</div>
+              <div class="chip neutral" id="routeHint">正在整理当前路由</div>
+            </div>
+            <div class="route-list" id="routeList">
+              <div class="agent-empty">暂无绑定关系</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="grid page-view" id="modelsView">
           <div class="card wide">
             <div class="card-header">
               <div class="card-title">模型管理</div>
@@ -242,14 +272,6 @@
             <div class="provider-list" id="providerList">
               <div class="agent-empty">暂无服务商配置</div>
             </div>
-          </div>
-
-          <div class="card wide">
-            <div class="card-header">
-            <div class="card-title">运行日志</div>
-              <div class="chip neutral" id="logsRealtimeChip">实时</div>
-            </div>
-            <div class="log-box" id="logBox"></div>
           </div>
         </section>
       </main>

@@ -121,6 +121,36 @@ body.busy {
   gap: 20px;
 }
 
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px;
+}
+
+.nav-item {
+  width: 100%;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.nav-item:hover {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.nav-item.active {
+  background: #ffffff;
+  border-color: var(--border);
+  color: var(--accent);
+  box-shadow: 0 8px 20px rgba(12, 16, 24, 0.06);
+}
+
 .brand {
   display: flex;
   align-items: center;
@@ -423,6 +453,14 @@ body.busy {
   gap: 18px;
 }
 
+.page-view {
+  display: none;
+}
+
+.page-view.active {
+  display: grid;
+}
+
 .card {
   background: var(--panel);
   border: 1px solid var(--border);
@@ -550,6 +588,49 @@ body.busy {
   margin-top: 12px;
   display: flex;
   gap: 8px;
+}
+
+.route-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.route-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--panel-soft);
+}
+
+.route-source {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.route-arrow {
+  font-size: 13px;
+  color: var(--subtext);
+}
+
+.route-target {
+  text-align: right;
+}
+
+.route-target-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.route-target-meta {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--subtext);
 }
 
 .agent-empty {
@@ -1011,6 +1092,7 @@ body.busy {
   justify-content: flex-end;
 }
 
+
 @keyframes petFloat {
   0%,
   100% {
@@ -1288,6 +1370,7 @@ body.busy {
   justify-content: flex-end;
 }
 
+
 .provider-meta {
   padding: 10px 12px;
   border-radius: 12px;
@@ -1361,6 +1444,15 @@ body.busy {
   }
   .service-actions {
     flex-wrap: wrap;
+  }
+
+  .route-row {
+    grid-template-columns: 1fr;
+    justify-items: flex-start;
+  }
+
+  .route-target {
+    text-align: left;
   }
 }
 

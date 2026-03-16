@@ -3,15 +3,22 @@ const connDot = document.getElementById("connDot");
 const connText = document.getElementById("connText");
 const tokenInput = document.getElementById("gatewayToken");
 const connectBtn = document.getElementById("connectBtn");
-const openChatBtn = document.getElementById("openChatBtn");
 const bootstrapBtn = document.getElementById("bootstrapBtn");
 const toggleGatewayBtn = document.getElementById("toggleGatewayBtn");
+const restartGatewayBtn = document.getElementById("restartGatewayBtn");
 const metricGateway = document.getElementById("metricGateway");
 const metricDevices = document.getElementById("metricDevices");
 const metricSessions = document.getElementById("metricSessions");
 const serviceChip = document.getElementById("serviceChip");
 const agentCardsEl = document.getElementById("agentCards");
 const agentHintEl = document.getElementById("agentHint");
+const routeListEl = document.getElementById("routeList");
+const routeHintEl = document.getElementById("routeHint");
+const sidebarNav = document.getElementById("sidebarNav");
+const homeView = document.getElementById("homeView");
+const agentsView = document.getElementById("agentsView");
+const modelsView = document.getElementById("modelsView");
+const routesView = document.getElementById("routesView");
 const modelPrimaryChip = document.getElementById("modelPrimaryChip");
 const providerListEl = document.getElementById("providerList");
 const setupBanner = document.getElementById("setupBanner");
@@ -87,6 +94,7 @@ const I18N = {
     appSubtitle: "你的 OpenClaw 控制中心",
     dashboard: "控制台",
     openChat: "打开聊天",
+    openCurrentAgentChat: "打开当前聊天",
     quickStart: "一键开始",
     gatewayLocal: "本地 Gateway",
     notConnected: "未连接",
@@ -100,9 +108,15 @@ const I18N = {
     sessionCount: "会话数量",
     startService: "启动服务",
     stopService: "停止服务",
+    restartService: "重启服务",
     agentMgmt: "Agent 管理",
     commonInfo: "普通用户常用信息",
     noAgentData: "暂无 Agent 数据",
+    routeOverviewHint: "一眼看懂当前 App 入口都交给了谁",
+    routeOverviewEmpty: "暂无绑定关系",
+    routeOverviewCount: "已整理 {count} 条路由",
+    routeOverviewFallback: "默认接管",
+    routeArrow: "->",
     modelMgmt: "模型管理",
     defaultModel: "默认模型：{model}",
     providersAndModels: "服务商与模型",
@@ -231,6 +245,14 @@ let addModelDraft = null;
 let addProviderDraft = null;
 let addAgentDraft = null;
 let connectPhoneDraft = null;
+let currentView = "home";
+
+const viewMap = {
+  home: homeView,
+  agents: agentsView,
+  models: modelsView,
+  routes: routesView,
+};
 
 const DEMO_DATA = {
   runtime: {
@@ -389,7 +411,6 @@ function applyTranslations() {
   if (providerSub) providerSub.textContent = t("providersSub");
   if (realtimeChip) realtimeChip.textContent = t("realtime");
 
-  if (openChatBtn) openChatBtn.textContent = t("openChat");
   if (bootstrapBtn) bootstrapBtn.textContent = t("quickStart");
   if (connectBtn) connectBtn.textContent = t("connect");
   if (tokenInput) tokenInput.placeholder = t("fillToken");
@@ -408,6 +429,7 @@ function setConnectionStatus(online, text) {
   toggleGatewayBtn.textContent = online ? t("stopService") : t("startService");
   toggleGatewayBtn.classList.toggle("ghost", online);
   toggleGatewayBtn.classList.toggle("primary", !online);
+  if (restartGatewayBtn) restartGatewayBtn.textContent = t("restartService");
 }
 
 function setMetric(el, value) {
@@ -437,6 +459,16 @@ function hideOnboarding() {
   onboardingCard?.classList.add("hidden");
 }
 
+function switchView(view) {
+  currentView = viewMap[view] ? view : "home";
+  Object.entries(viewMap).forEach(([key, el]) => {
+    el?.classList.toggle("active", key === currentView);
+  });
+  sidebarNav?.querySelectorAll(".nav-item").forEach((el) => {
+    el.classList.toggle("active", el.dataset.view === currentView);
+  });
+}
+
 function setBusy(active, title = "正在处理...", text = "请稍等，不要重复点击。") {
   isBusy = active;
   busyOverlay.classList.toggle("hidden", !active);
@@ -446,9 +478,9 @@ function setBusy(active, title = "正在处理...", text = "请稍等，不要�
 
   [
     connectBtn,
-    openChatBtn,
     bootstrapBtn,
     toggleGatewayBtn,
+    restartGatewayBtn,
     installCliBtn,
     copyInstallBtn,
     openDocsBtn,
@@ -875,6 +907,74 @@ function normalizeSessions(payload) {
   }));
 }
 
+function routeRowsForAgents(agents) {
+  const rows = [];
+  const used = new Set();
+
+  agents.forEach((agent) => {
+    if (!Array.isArray(agent.routes)) return;
+    agent.routes.forEach((route) => {
+      const source = String(route || "").trim();
+      if (!source) return;
+      const key = `${source}=>${agent.id}`;
+      if (used.has(key)) return;
+      used.add(key);
+      rows.push({
+        source,
+        target: agent.name,
+        detail: agent.id,
+      });
+    });
+  });
+
+  const defaultAgent = agents.find((agent) => agent.isDefault) || agents[0] || null;
+  if (defaultAgent) {
+    channelsCache.forEach((binding) => {
+      const [channel, account] = String(binding).split(":");
+      const source = `${formatChannelName(channel)}${account ? ` · ${account}` : ""}`;
+      if (rows.some((row) => row.source === source)) return;
+      rows.push({
+        source,
+        target: defaultAgent.name,
+        detail: `${defaultAgent.id} · ${t("routeOverviewFallback")}`,
+      });
+    });
+  }
+
+  return rows;
+}
+
+function renderRouteOverview(agents) {
+  const rows = routeRowsForAgents(agents);
+
+  if (routeHintEl) {
+    routeHintEl.textContent = rows.length
+      ? t("routeOverviewCount", { count: rows.length })
+      : t("routeOverviewHint");
+  }
+
+  if (!routeListEl) return;
+  if (!rows.length) {
+    routeListEl.innerHTML = `<div class="agent-empty">${t("routeOverviewEmpty")}</div>`;
+    return;
+  }
+
+  routeListEl.innerHTML = rows
+    .map(
+      (row) => `
+        <div class="route-row">
+          <div class="route-source">${row.source}</div>
+          <div class="route-arrow">${t("routeArrow")}</div>
+          <div class="route-target">
+            <div class="route-target-name">${row.target}</div>
+            <div class="route-target-meta">${row.detail}</div>
+          </div>
+        </div>
+      `
+    )
+    .join("");
+}
+
 function extractAgentId(key) {
   if (!key || typeof key !== "string" || !key.startsWith("agent:")) return null;
   return key.split(":")[1] || null;
@@ -1161,6 +1261,7 @@ function renderAgentCards(agents, sessions) {
         ${bindings.map((binding) => `<span class="binding-pill">${binding}</span>`).join("")}
       </div>
       <div class="agent-actions">
+        <button class="btn ghost small agent-chat-btn" data-agent-id="${agent.id}" data-agent-name="${agent.name}">${t("openCurrentAgentChat")}</button>
         <button class="btn ghost small agent-connect-btn" data-agent-id="${agent.id}">${t("connectPhone")}</button>
         ${agent.id === "main" ? "" : `<button class="btn ghost small agent-delete-btn" data-agent-id="${agent.id}">${t("delete")}</button>`}
       </div>
@@ -1188,6 +1289,19 @@ function renderAgentCards(agents, sessions) {
     el.addEventListener("click", () => {
       const agent = agents.find((item) => item.id === el.dataset.agentId);
       if (agent) openConnectPhoneModal(agent);
+    });
+  });
+  agentCardsEl.querySelectorAll(".agent-chat-btn").forEach((el) => {
+    el.addEventListener("click", async () => {
+      try {
+        const result = await invoke("open_openclaw_chat_window", {
+          agentId: el.dataset.agentId,
+          agentName: el.dataset.agentName,
+        });
+        appendLog(`[${new Date().toLocaleTimeString()}] ${result.detail}`);
+      } catch (err) {
+        appendLog(`[${new Date().toLocaleTimeString()}] ${t("openChatFail", { err })}`);
+      }
     });
   });
   agentCardsEl.querySelectorAll("[data-help-toggle='token-usage']").forEach((el) => {
@@ -1365,6 +1479,7 @@ function formatChannelName(channel) {
   return labels[String(channel || "").toLowerCase()] || channel || "未知渠道";
 }
 
+
 function loadDemoDashboard() {
   runtimeStatus = DEMO_DATA.runtime;
   modelConfigCache = DEMO_DATA.models;
@@ -1382,6 +1497,7 @@ function loadDemoDashboard() {
   setMetric(metricDevices, agentsCache.length);
   setMetric(metricSessions, sessionsCache.length);
   renderAgentCards(agentsCache, sessionsCache);
+  renderRouteOverview(agentsCache);
   renderModels(modelConfigCache);
   appendLog(`[${new Date().toLocaleTimeString()}] 已载入演示数据`);
 }
@@ -1461,6 +1577,7 @@ async function syncDashboard() {
     setMetric(metricDevices, agentsCache.length);
     setMetric(metricSessions, sessionsCache.length);
     renderAgentCards(agentsCache, sessionsCache);
+    renderRouteOverview(agentsCache);
     renderModels(modelConfigCache);
     renderOnboarding();
     appendLog(
@@ -1540,6 +1657,26 @@ async function toggleGateway() {
   return startGateway();
 }
 
+async function restartGateway() {
+  return withBusy("正在重启 Gateway", "正在关闭并重新启动本地服务。", async () => {
+    appendLog(`[${new Date().toLocaleTimeString()}] 正在重启 Gateway...`);
+    try {
+      const stopResult = await invoke("stop_openclaw_gateway");
+      appendLog(`[${new Date().toLocaleTimeString()}] ${stopResult.detail}`);
+    } catch (err) {
+      appendLog(`[${new Date().toLocaleTimeString()}] 停止 Gateway 失败: ${err}`);
+    }
+
+    try {
+      const startResult = await invoke("start_openclaw_gateway");
+      appendLog(`[${new Date().toLocaleTimeString()}] ${startResult.detail}`);
+      await syncDashboard();
+    } catch (err) {
+      appendLog(`[${new Date().toLocaleTimeString()}] 启动 Gateway 失败: ${err}`);
+    }
+  });
+}
+
 async function createAgent() {
   appendLog(`[${new Date().toLocaleTimeString()}] 开始创建 Agent...`);
   const name = addAgentNameInput?.value.trim() || "";
@@ -1611,6 +1748,11 @@ async function submitRenameAgent() {
       });
       appendLog(`[${new Date().toLocaleTimeString()}] ${result.detail}`);
       if (result.success) {
+        agentsCache = agentsCache.map((agent) =>
+          agent.id === agentId ? { ...agent, name: trimmed } : agent
+        );
+        renderAgentCards(agentsCache, sessionsCache);
+        renderRouteOverview(agentsCache);
         await syncDashboard();
       }
     } catch (err) {
@@ -1800,14 +1942,7 @@ async function submitConnectPhone() {
 connectBtn.addEventListener("click", ensureGatewayThenSync);
 bootstrapBtn.addEventListener("click", ensureGatewayThenSync);
 toggleGatewayBtn.addEventListener("click", toggleGateway);
-openChatBtn.addEventListener("click", async () => {
-  try {
-    const result = await invoke("open_openclaw_chat_window");
-    appendLog(`[${new Date().toLocaleTimeString()}] ${result.detail}`);
-  } catch (err) {
-    appendLog(`[${new Date().toLocaleTimeString()}] ${t("openChatFail", { err })}`);
-  }
-});
+restartGatewayBtn.addEventListener("click", restartGateway);
 installCliBtn.addEventListener("click", async () => {
   try {
     const result = await invoke("launch_openclaw_installer");
@@ -1920,6 +2055,12 @@ connectPhoneAppTypeSelect.addEventListener("keydown", (event) => {
   }
 });
 
+sidebarNav?.querySelectorAll(".nav-item").forEach((el) => {
+  el.addEventListener("click", () => {
+    switchView(el.dataset.view);
+  });
+});
+
 window.addEventListener("focus", () => {
   if (!isBusy) syncDashboard();
 });
@@ -1944,13 +2085,14 @@ setBootstrapState("检查本地环境...");
 hideSetupBanner();
 hideOnboarding();
 renderAgentCards([], []);
+renderRouteOverview([]);
 renderModels(null);
+switchView("home");
 
 if (isDemoMode) {
   tokenInput.value = "demo-mode";
   tokenInput.disabled = true;
   connectBtn.disabled = true;
-  openChatBtn.disabled = true;
   bootstrapBtn.disabled = true;
   toggleGatewayBtn.disabled = true;
   loadDemoDashboard();

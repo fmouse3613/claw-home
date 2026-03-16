@@ -8,6 +8,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
 use tauri::{AppHandle, Manager, Url, WebviewUrl, WebviewWindowBuilder};
+use tauri::webview::NewWindowResponse;
+use tauri_plugin_opener::OpenerExt;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -246,8 +248,61 @@ fn launch_in_terminal(command: &str) -> Result<std::process::ExitStatus, String>
     }
 }
 
+fn build_openclaw_chat_url(agent_id: Option<&str>, token: Option<&str>) -> Result<Url, String> {
+    let mut url = String::from("http://127.0.0.1:18789/");
+
+    if let Some(agent_id) = agent_id.filter(|value| !value.trim().is_empty()) {
+        let session_key = format!("agent:{}:main", agent_id.trim());
+        url.push_str("?session=");
+        url.push_str(&urlencoding::encode(&session_key));
+    }
+
+    if let Some(token) = token.filter(|value| !value.trim().is_empty()) {
+        url.push_str("#token=");
+        url.push_str(&urlencoding::encode(token.trim()));
+    }
+
+    Url::parse(&url).map_err(|err| err.to_string())
+}
+
+fn chat_window_label(agent_id: Option<&str>) -> String {
+    match agent_id.filter(|value| !value.trim().is_empty()) {
+        Some(agent_id) => {
+            let suffix = agent_id
+                .chars()
+                .map(|ch| {
+                    if ch.is_ascii_alphanumeric() {
+                        ch.to_ascii_lowercase()
+                    } else {
+                        '-'
+                    }
+                })
+                .collect::<String>()
+                .trim_matches('-')
+                .to_string();
+
+            if suffix.is_empty() {
+                "openclaw-chat-agent".to_string()
+            } else {
+                format!("openclaw-chat-{}", suffix)
+            }
+        }
+        None => "openclaw-chat".to_string(),
+    }
+}
+
+fn is_local_openclaw_chat_url(url: &Url) -> bool {
+    matches!(url.scheme(), "http" | "https")
+        && matches!(url.host_str(), Some("127.0.0.1") | Some("localhost"))
+        && url.port_or_known_default() == Some(18789)
+}
+
 #[tauri::command]
-fn open_openclaw_chat_window(app: AppHandle) -> Result<OpenClawCommandResult, String> {
+fn open_openclaw_chat_window(
+    app: AppHandle,
+    agent_id: Option<String>,
+    agent_name: Option<String>,
+) -> Result<OpenClawCommandResult, String> {
     if !gateway_is_online() {
         return Ok(OpenClawCommandResult {
             success: false,
@@ -256,34 +311,52 @@ fn open_openclaw_chat_window(app: AppHandle) -> Result<OpenClawCommandResult, St
         });
     }
 
-    if let Some(window) = app.get_webview_window("openclaw-chat") {
+    let label = chat_window_label(agent_id.as_deref());
+    if let Some(window) = app.get_webview_window(&label) {
         let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
         return Ok(OpenClawCommandResult {
             success: true,
             action: "open-chat-window".to_string(),
-            detail: "已打开 OpenClaw 聊天窗口。".to_string(),
+            detail: match agent_name.as_deref().filter(|value| !value.trim().is_empty()) {
+                Some(name) => format!("已打开 {} 的聊天窗口。", name),
+                None => "已打开 OpenClaw 聊天窗口。".to_string(),
+            },
         });
     }
 
     let token = read_openclaw_gateway_token()?;
-    let chat_url = if let Some(token) = token.filter(|value| !value.trim().is_empty()) {
-        Url::parse(&format!(
-            "http://127.0.0.1:18789/#token={}",
-            urlencoding::encode(&token)
-        ))
-        .map_err(|err| err.to_string())?
-    } else {
-        Url::parse("http://127.0.0.1:18789/").map_err(|err| err.to_string())?
+    let chat_url = build_openclaw_chat_url(agent_id.as_deref(), token.as_deref())?;
+    let title = match agent_name.as_deref().filter(|value| !value.trim().is_empty()) {
+        Some(name) => format!("{} · 聊天", name),
+        None => "OpenClaw Chat".to_string(),
     };
+    let nav_app_handle = app.clone();
+    let popup_app_handle = app.clone();
 
     WebviewWindowBuilder::new(
         &app,
-        "openclaw-chat",
+        label,
         WebviewUrl::External(chat_url),
     )
-    .title("OpenClaw Chat")
+    .on_navigation(move |url| {
+        if is_local_openclaw_chat_url(url) {
+            true
+        } else {
+            let _ = nav_app_handle
+                .opener()
+                .open_url(url.as_str(), None::<String>);
+            false
+        }
+    })
+    .on_new_window(move |url, _features| {
+        let _ = popup_app_handle
+            .opener()
+            .open_url(url.as_str(), None::<String>);
+        NewWindowResponse::Deny
+    })
+    .title(title)
     .inner_size(1200.0, 860.0)
     .min_inner_size(980.0, 720.0)
     .resizable(true)
@@ -294,7 +367,10 @@ fn open_openclaw_chat_window(app: AppHandle) -> Result<OpenClawCommandResult, St
     Ok(OpenClawCommandResult {
         success: true,
         action: "open-chat-window".to_string(),
-        detail: "已打开 OpenClaw 聊天窗口。".to_string(),
+        detail: match agent_name.as_deref().filter(|value| !value.trim().is_empty()) {
+            Some(name) => format!("已打开 {} 的聊天窗口。", name),
+            None => "已打开 OpenClaw 聊天窗口。".to_string(),
+        },
     })
 }
 
@@ -1284,13 +1360,71 @@ fn read_model_config_sync() -> Result<Value, String> {
     }))
 }
 
+fn merge_agent_display_names_from_config(agents: &mut Value) {
+    let config_agents = match run_openclaw_json(["config", "get", "agents", "--json"]) {
+        Ok(value) => value,
+        Err(_) => return,
+    };
+
+    let config_list = match config_agents.get("list").and_then(|value| value.as_array()) {
+        Some(list) => list,
+        None => return,
+    };
+
+    let agent_list = match agents.as_array_mut() {
+        Some(list) => list,
+        None => return,
+    };
+
+    for agent in agent_list.iter_mut() {
+        let agent_obj = match agent.as_object_mut() {
+            Some(obj) => obj,
+            None => continue,
+        };
+        let agent_id = match agent_obj
+            .get("id")
+            .and_then(|value| value.as_str())
+            .or_else(|| agent_obj.get("agentId").and_then(|value| value.as_str()))
+        {
+            Some(id) => id,
+            None => continue,
+        };
+
+        let config_agent = match config_list.iter().find(|entry| {
+            entry
+                .get("id")
+                .and_then(|value| value.as_str())
+                == Some(agent_id)
+        }) {
+            Some(entry) => entry,
+            None => continue,
+        };
+
+        if let Some(identity_name) = config_agent
+            .get("identity")
+            .and_then(|value| value.get("name"))
+            .and_then(|value| value.as_str())
+        {
+            agent_obj.insert(
+                "identityName".to_string(),
+                Value::String(identity_name.to_string()),
+            );
+        } else if let Some(name) = config_agent.get("name").and_then(|value| value.as_str()) {
+            agent_obj.insert("name".to_string(), Value::String(name.to_string()));
+        }
+    }
+}
+
 fn load_dashboard_data_sync() -> Result<Value, String> {
     let runtime = inspect_openclaw_runtime_sync()?;
-    let agents = if runtime.cli_installed {
+    let mut agents = if runtime.cli_installed {
         run_openclaw_json(["agents", "list", "--json"]).unwrap_or_else(|_| serde_json::json!([]))
     } else {
         serde_json::json!([])
     };
+    if runtime.cli_installed {
+        merge_agent_display_names_from_config(&mut agents);
+    }
     let sessions = if runtime.cli_installed {
         run_openclaw_json(["sessions", "--all-agents", "--json"])
             .unwrap_or_else(|_| serde_json::json!({ "sessions": [] }))
